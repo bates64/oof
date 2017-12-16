@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset='utf-8'/>
+
+<h1> Oof counter example </h1>
+<span id='counter'></span>
+
+<script src='../oof.js'></script>
+<script>
+
+const counter = oof.mutable(n => n, 0).mount('#counter')
+
+setInterval(() => {
+  counter.state++
+  counter.update()
+}, 1000)
+
+</script>
