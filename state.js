@@ -43,6 +43,13 @@ class Reference extends Changeable {
     this.referencedObject = referencedObject
     this.key = key
 
+    // The actual dictionary we're watching might change, if it's gotten from
+    // the passed reference object. We need to keep track of the dictionary
+    // and our "on change" listener, so that we can compare/remove them when
+    // the referenced object's value changes.
+    this.oldDictionary = null
+    this.oldDictionaryListener = null
+
     if (this.referencedObject instanceof Changeable) {
       this.referencedObject.onChange(value => this.update())
     }
@@ -55,28 +62,69 @@ class Reference extends Changeable {
   }
 
   update() {
-    let object, key
+    const key = Changeable.valueOf(this.key)
+    const object = Changeable.valueOf(this.referencedObject)
 
-    if (this.referencedObject) {
-      if (this.referencedObject instanceof Changeable) {
-        object = this.referencedObject.value
-      } else {
-        object = this.referencedObject
-      }
-    }
-
-    if (this.key) {
-      if (this.key instanceof Changeable) {
-        key = this.key.value
-      } else {
-        key = this.key
-      }
-    }
-
-    if (object && key) {
+    if (key && object) {
       this.set(object[key])
     } else {
       this.set(null)
     }
+
+    // Now's the time to assign the object as the "watched dictionary"
+    // if it is a dictionary...
+
+    if (object !== this.oldDictionary) {
+      if (this.oldDictionaryListener) {
+        this.oldDictionaryListener.remove()
+      }
+
+      if (object && object instanceof Dictionary) {
+        this.oldDictionary = object
+        this.oldDictionaryListener = object.onPropertyChange((key, value) => {
+          if (key === Changeable.valueOf(this.key)) {
+            this.update()
+          }
+        })
+      }
+    }
   }
 }
+
+class Dictionary {
+  // Just like a normal object, except it emits an event whenever a property
+  // is set on it.
+
+  constructor(defaultData = {}) {
+    Object.assign(this, defaultData)
+
+    this[Dictionary.listeners] = []
+
+    return new Proxy(this, {
+      set(target, key, value) {
+        Reflect.set(target, key, value)
+
+        for (const listener of target[Dictionary.listeners]) {
+          listener(key, value)
+        }
+
+        return true
+      }
+    })
+  }
+
+  onPropertyChange(listener) {
+    this[Dictionary.listeners].push(listener)
+
+    return {
+      remove: () => {
+        const listeners = this[Dictionary.listeners]
+        if (listeners.includes(listener)) {
+          listeners.splice(listeners.indexOf(listener), 1)
+        }
+      }
+    }
+  }
+}
+
+Dictionary.listeners = Symbol()
