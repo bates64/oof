@@ -14,6 +14,18 @@ class Changeable {
       listener(newValue)
     }
   }
+
+  static valueOf(object) {
+    // If the given object is a Changeable, this gets its value.
+    // Otherwise it just returns the object. This is handy when you're making
+    // a function which is designed to take either an object or a Changeable.
+
+    if (typeof object === 'object' && object instanceof Changeable) {
+      return object.value
+    } else {
+      return object
+    }
+  }
 }
 
 class Value extends Changeable {
