@@ -1,333 +1,249 @@
-'use strict'
+window.oof = (function() {
+  'use strict'
 
-// Simple wrapper around document.createElement.
-const oof = (tagSpec = '', attrs = {}, children = []) => {
-  const { tag, id, classes } = oof.parseTagSpec(tagSpec)
+  // Changeables ///////////////////////////////////////////////////////////////
 
-  const el = document.createElement(tag)
-
-  if (id) {
-    el.id = id
-  }
-
-  for (const className of classes) {
-    el.classList.add(className)
-  }
-
-  for (const [ attr, value ] of Object.entries(attrs)) {
-    el.setAttribute(attr, value)
-  }
-
-  for (const child of oof.nodeList(children)) {
-    el.appendChild(child)
-  }
-
-  el.on = (event, fn) => {
-    el.addEventListener(event, evt => fn(evt, el))
-    return el
-  }
-
-  return el
-}
-
-// Parses a tag spec (string), returning its tag name, classes, and ID.
-// Tag specs look like `tag#id.class1.class2`.
-oof.parseTagSpec = tagSpec => {
-  const spec = { tag: '', id: '', classes: [] }
-
-  let state = 'tag'
-  for (const char of tagSpec) {
-    switch (char) {
-      case '#':
-        spec.id = ''
-        state = 'id'
-        break
-      case '.':
-        spec.classes.push('')
-        state = 'class'
-        break
-      default:
-        switch (state) {
-          case 'tag':
-            spec.tag += char
-            break
-          case 'id':
-            spec.id += char
-            break
-          case 'class':
-            spec.classes[spec.classes.length - 1] += char
-            break
-        }
+  class Changeable {
+    constructor() {
+      this.listeners = []
+      this.value = undefined // Unset
     }
-  }
 
-  // Special-case for tag -- if no tag is given, assume <div>.
-  if (spec.tag === '') {
-    spec.tag = 'div'
-  }
-
-  return spec
-}
-
-// Creates a array of elements from an array of different types.
-// Turns anything not an HTML element or oof.mutable into a text node.
-// oof.mutables are rendered.
-oof.nodeList = (elements, state) => {
-  const list = []
-
-  if (!Array.isArray(elements)) {
-    // If we get a singular element, treat it as
-    elements = [ elements ]
-  }
-
-  for (const el of elements) {
-    if (el instanceof HTMLElement) {
-      // Just add to the list
-      list.push(el)
-    } else if (el[oof.isMutable] === true) {
-      // Render oof.mutable
-      const mutEl = document.createElement('div')
-      el.mount(mutEl)
-      list.push(mutEl)
-    } else {
-      // Turn into text node
-      list.push(document.createTextNode(el.toString()))
+    onChange(listener) {
+      this.listeners.push(listener)
     }
-  }
 
-  return list
-}
-
-// Fancy, mutable elements with state. Takes a render function
-// and, optionally, an initial state.
-oof.mutable = (render, initialState) => {
-  const mountedTo = new Set()
-  let nodeTree = []
-
-  const self = {
-    state: initialState,
-    [oof.isMutable]: true,
-
-    // state = newState. For chaining.
-    // Remember to call `update` afterwards!
-    setState(newState) {
-      self.state = newState
-
-      // Chaining!
-      return self
-    },
-
-    // Calls the new render function and updates every mounted
-    // element to use the new, re-rendered node tree.
-    update(reason = undefined) {
-      // Re-render the node tree
-      nodeTree = render(self.state, nodeTree, reason)
-
-      // For each mounted element...
-      for (const el of mountedTo) {
-        // Remove all children of this element
-        while (el.hasChildNodes()) {
-          el.removeChild(el.lastChild)
-        }
-
-        // Add all children of the new node tree to this element
-        for (const childNode of oof.nodeList(nodeTree)) {
-          el.appendChild(childNode)
-        }
+    set(newValue) {
+      this.value = newValue
+      for (const listener of this.listeners) {
+        listener(newValue)
       }
+    }
 
-      // Chaining!
-      return self
-    },
+    static valueOf(object) {
+      // If the given object is a Changeable, this gets its value.
+      // Otherwise it just returns the object. This is handy when you're making
+      // a function which is designed to take either an object or a Changeable.
 
-    // Will render (and, in the future, update) to `selectorOrEl`.
-    mount(selectorOrEl) {
-      let els
-      if (selectorOrEl instanceof HTMLElement) {
-        els = [ selectorOrEl ]
+      if (typeof object === 'object' && object instanceof Changeable) {
+        return object.value
       } else {
-        els = document.querySelectorAll(selectorOrEl)
+        return object
       }
-
-      for (const el of els) {
-        mountedTo.add(el)
-      }
-
-      self.update(oof.updateReasons.newMount)
-
-      // Chaining!
-      return self
-    },
+    }
   }
 
-  return self
-}
+  class Value extends Changeable {
+    constructor(initialValue) {
+      super()
 
-// Fancy mutable list elements. Helpful as to not
-// re-render the entire list on an update.
-oof.mutableList = (render, initialState = [], listItemTag = '') => {
-  const state = initialState
-  const mounts = []
-
-  function renderEl(itemState) {
-    let el = render(itemState)
-
-    // Render as text.
-    if (typeof el === 'string' || typeof el === 'number') {
-      return document.createTextNode(el)
+      this.set(initialValue)
     }
+  }
 
-    // Wrap multiple elements in a `listItemTag` element.
-    if (Array.isArray(el) || typeof el !== 'object') {
-      const li = oof(listItemTag)
+  class Reference extends Changeable {
+    constructor(referencedObject, key) {
+      super()
 
-      for (const node of oof.nodeList(el)) {
-        li.appendChild(node)
+      this.referencedObject = referencedObject
+      this.key = key
+
+      // The actual dictionary we're watching might change, if it's gotten from
+      // the passed reference object. We need to keep track of the dictionary
+      // and our "on change" listener, so that we can compare/remove them when
+      // the referenced object's value changes.
+      this.oldDictionary = null
+      this.oldDictionaryListener = null
+
+      if (this.referencedObject instanceof Changeable) {
+        this.referencedObject.onChange(value => this.update())
       }
 
-      return li
+      if (this.key instanceof Changeable) {
+        this.key.onChange(value => this.update())
+      }
+
+      this.update()
     }
 
-    // If it's an oof.mutable, mount it.
+    update() {
+      const key = Changeable.valueOf(this.key)
+      const object = Changeable.valueOf(this.referencedObject)
+
+      if (key && object) {
+        this.set(object[key])
+      } else {
+        this.set(null)
+      }
+
+      // Now's the time to assign the object as the "watched dictionary"
+      // if it is a dictionary...
+
+      if (object !== this.oldDictionary) {
+        if (this.oldDictionaryListener) {
+          this.oldDictionaryListener.remove()
+        }
+
+        if (object && object instanceof Dictionary) {
+          this.oldDictionary = object
+          this.oldDictionaryListener = object.onPropertyChange((key, value) => {
+            if (key === Changeable.valueOf(this.key)) {
+              this.update()
+            }
+          })
+        }
+      }
+    }
+  }
+
+  class Computed extends Changeable {
+    // A simple "computed" value. Computeds depend on other changeables;
+    // when any of the computed's changeables change, it immediately updates
+    // its value. This value is computed according to the given callback
+    // function.
     //
-    // Slight problem here: we will *always* use <listItemTag> as a
-    //                      wrapper, even if we don't need to.
-    if (el[oof.isMutable] === true) {
-      const li = oof(listItemTag)
-      el.mount(li)
+    // Computeds work with promises. If you want to make your callback an
+    // async function, it'll work just fine; the computed's value won't be
+    // updated until the promise resolves.
 
-      return li
+    constructor(dependencies, fn) {
+      super()
+
+      this.dependencies = dependencies
+      this.fn = fn
+
+      for (const item of dependencies) {
+        item.onChange(() => this.update())
+      }
+
+      this.update()
     }
 
-    return el
+    async update() {
+      // Calls fn(a, b, c, d...) where the arguments are the values of the
+      // dependencies.
+      this.set(await this.fn(...this.dependencies.map(dep => dep.value)))
+    }
   }
 
-  // Array-like list wrapper, plus mount function.
-  const self = {
-    [oof.isMutable]: true,
+  class Dictionary {
+    // Just like a normal object, except it emits an event whenever a property
+    // is set on it.
 
-    // Like Array#push.
-    append(item) {
-      state.push(item)
+    constructor(defaultData = {}) {
+      Object.assign(this, defaultData)
 
-      const itemEl = renderEl(item)
+      this[Dictionary.listeners] = []
 
-      for (const mount of mounts) {
-        mount.el.appendChild(itemEl)
-        mount.nodes.push(itemEl)
+      return new Proxy(this, {
+        set(target, key, value) {
+          Reflect.set(target, key, value)
+
+          for (const listener of target[Dictionary.listeners]) {
+            listener(key, value)
+          }
+
+          return true
+        }
+      })
+    }
+
+    onPropertyChange(listener) {
+      this[Dictionary.listeners].push(listener)
+
+      return {
+        remove: () => {
+          const listeners = this[Dictionary.listeners]
+          if (listeners.includes(listener)) {
+            listeners.splice(listeners.indexOf(listener), 1)
+          }
+        }
       }
-    },
+    }
+  }
 
-    // Like Array#unshift.
-    prepend(item) {
-      state.unshift(item)
+  Dictionary.listeners = Symbol()
 
-      const itemEl = renderEl(item)
 
-      for (const mount of mounts) {
-        // HTMLElement#prepend exists, but it's kinda unstable, and
-        // it's decently easy to do this anyway.
-        if (mount.el.firstChild) {
-          mount.el.insertBefore(itemEl, mount.el.firstChild)
+  // El ////////////////////////////////////////////////////////////////////////
+
+  class El {
+    constructor(selector = null, opts = {}) {
+      // Mount to everything matched by `selector`
+      const mounts = selector ? document.querySelectorAll(selector) : []
+
+      // Watch the changeable state returned by this.init().
+      const changeables = this.init(opts)
+
+      if (!Array.isArray(changeables)) {
+        throw `El ${this.constructor.name}'s init() method did not return an `
+            + `array of oof.Changeables`
+      }
+
+      // Quick-and-dirty unique ID
+      const id = Date.now() + Math.floor(Math.random() * 10000)
+
+      const rerender = () => {
+        // Remove old rendered nodes
+        let oldNode
+        while (oldNode = document.querySelector(`[data-oof="${id}"]`)) {
+          oldNode.remove()
+        }
+
+        // Render to every mount (`selector`)
+        const node = this.render(...changeables.map(ch => ch.value))
+
+        if (!(node instanceof HTMLElement)) {
+          throw `El ${this.constructor.name}'s render() method did not return `
+              + `an HTMLElement`
+        }
+
+        node.dataset.oof = id
+
+        for (const parent of mounts) {
+          parent.appendChild(node)
+        }
+      }
+
+      for (const [ index, changeable ] of changeables.entries()) {
+        if (changeable instanceof Changeable) {
+          // Watch the Changeable for changes, and trigger a re-render when it
+          // does.
+          changeable.onChange(() => {
+            rerender()
+          })
         } else {
-          mount.el.appendChild(itemEl)
+          throw `El ${this.constructor.name}'s init() method did not return a `
+              + `Changeable at array index #${index}`
         }
-
-        mount.nodes.unshift(itemEl)
-      }
-    },
-
-    // Like Array#splice(0).
-    clear() {
-      state.splice(0)
-
-      for (const mount of mounts) {
-        // Pro-tip: avoid iterating through an element's childNodes using
-        // for..of! If you modify the list while you're iterating through it,
-        // some elements won't actually be iterated over. In the case of a
-        // "clear" function, that means you end up with "garbage" or "ghost"
-        // elements (missed when the rest were removed). Yikes!
-        let child
-        while (child = mount.el.firstChild) {
-          mount.el.removeChild(child)
-        }
-
-        mount.nodes.splice(0)
-      }
-    },
-
-    // Returns the itemState used for a particular item.
-    get(index) {
-      return state[index]
-    },
-
-    // Returns the last item in the state array.
-    getLast() {
-      return this.get(this.length - 1)
-    },
-
-    // Sets the itemState used for a particular item, and re-renders it.
-    set(index, newState) {
-      state[index] = newState
-
-      const itemEl = renderEl(newState)
-
-      for (const mount of mounts) {
-        mount.el.replaceChild(itemEl, mount.nodes[index])
-        mount.nodes[index] = itemEl
       }
 
-      // Chaining!
-      return self
-    },
+      // Initial render
+      rerender()
+    }
 
-    // Returns the length of the state.
-    get length() {
-      return state.length
-    },
+    init(opts) {
+      console.warn(`El ${this.constructor.name} has no init() method`)
+      return []
+    }
 
-    // Will render (and, in the future, update) to `selectorOrEl`.
-    mount(selectorOrEl) {
-      let els
-      if (selectorOrEl instanceof HTMLElement) {
-        els = [ selectorOrEl ]
-      } else {
-        els = document.querySelectorAll(selectorOrEl)
-      }
+    render(...changeables) {
+      throw `El ${this.constructor.name} has no render() method`
+    }
 
-      for (const el of els) {
-        // Note this code is slightly different to that used in oof.mutable#mount.
-        const nodes = self.renderWhole(el)
-        mounts.push({ el, nodes })
-      }
-
-      // Chaining!
-      return self
-    },
-
-    // Renders the entire list to HTMLElement `to`, ONCE.
-    // You probably won't need this - it's mainly for internal use.
-    //
-    // Does *not* chain - returns an array of rendered child nodes.
-    renderWhole(to) {
-      const nodes = []
-
-      for (const item of state) {
-        const el = renderEl(item)
-
-        to.appendChild(el)
-        nodes.push(el)
-      }
-
-      return nodes
-    },
+    destroy() {
+      console.warn(`El ${this.constructor.name} has no destroy() method`)
+    }
   }
 
-  return self
-}
+  //////////////////////////////////////////////////////////////////////////////
 
-oof.updateReasons = {
-  newMount: Symbol('new mount'),
-}
+  return {
+    version: '0.1.0',
+    
+    El,
 
-oof.isMutable = Symbol('is oof.mutable')
+    // Changeables
+    Changeable, Value, Reference, Computed, Dictionary,
+  }
+})()
