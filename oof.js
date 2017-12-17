@@ -252,12 +252,34 @@ window.oof = (function() {
 
   El.renderWithState = Symbol()
 
+  // Mini //////////////////////////////////////////////////////////////////////
+
+  function mini(selector, render, initialState) {
+    const miniClass = class extends El {
+      init() {
+        if (initialState instanceof Changeable) {
+          this.state = initialState
+        } else {
+          this.state = new Value(initialState)
+        }
+        
+        return [ this.state ]
+      }
+
+      render(state) {
+        return render(state)
+      }
+    }
+
+    return new miniClass(selector)
+  }
+
   //////////////////////////////////////////////////////////////////////////////
 
   return {
     version: '0.1.0', usingMorphdom,
 
-    El,
+    El, mini,
 
     // Changeables
     Changeable, Value, Reference, Computed, Dictionary,
