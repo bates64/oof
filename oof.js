@@ -1,6 +1,9 @@
 window.oof = (function() {
   'use strict'
 
+  // Optional dependency: morphdom
+  const usingMorphdom = typeof morphdom !== 'undefined'
+
   // Changeables ///////////////////////////////////////////////////////////////
 
   class Changeable {
@@ -170,7 +173,10 @@ window.oof = (function() {
   class El {
     constructor(selector = null, opts = {}) {
       // Mount to everything matched by `selector`
-      const mounts = selector ? document.querySelectorAll(selector) : []
+      const mounts = selector
+        ? Array.from(document.querySelectorAll(selector))
+            .map(el => ([ el, null ]))
+        : []
 
       // Watch the changeable state returned by this.init().
       const changeables = this.init(opts)
@@ -180,28 +186,36 @@ window.oof = (function() {
             + `array of oof.Changeables`
       }
 
-      // Quick-and-dirty unique ID
-      const id = Date.now() + Math.floor(Math.random() * 10000)
-
-      const rerender = () => {
-        // Remove old rendered nodes
-        let oldNode
-        while (oldNode = document.querySelector(`[data-oof="${id}"]`)) {
-          oldNode.remove()
-        }
-
-        // Render to every mount (`selector`)
+      // this.render but with the current state
+      this[El.renderWithState] = () => {
         const node = this.render(...changeables.map(ch => ch.value))
-
+      
         if (!(node instanceof HTMLElement)) {
           throw `El ${this.constructor.name}'s render() method did not return `
               + `an HTMLElement`
         }
 
-        node.dataset.oof = id
+        return node
+      }
 
-        for (const parent of mounts) {
-          parent.appendChild(node)
+      // Render to every mount (`selector`)
+      const rerender = () => {
+        for (const mount of mounts) {
+          // It's more efficient to re-render for each mount than it is
+          // to deep-clone node for each.
+          const node = this[El.renderWithState]()
+
+          if (!mount[1]) {
+            // First render
+            mount[0].appendChild(mount[1] = node)
+          } else if (usingMorphdom) {
+            // Morph
+            morphdom(mount[1], node) // old, new
+          } else if (!usingMorphdom) {
+            // Replace
+            mount[0].replaceChild(node, mount[1]) // new, old
+            mount[1] = node
+          }
         }
       }
 
@@ -236,11 +250,13 @@ window.oof = (function() {
     }
   }
 
+  El.renderWithState = Symbol()
+
   //////////////////////////////////////////////////////////////////////////////
 
   return {
-    version: '0.1.0',
-    
+    version: '0.1.0', usingMorphdom,
+
     El,
 
     // Changeables
