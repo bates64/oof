@@ -39,11 +39,11 @@ oof.parseTagSpec = tagSpec => {
   for (const char of tagSpec) {
     switch (char) {
       case '#':
-        id = ''
+        spec.id = ''
         state = 'id'
         break
       case '.':
-        classes.push('')
+        spec.classes.push('')
         state = 'class'
         break
       default:
