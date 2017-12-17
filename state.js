@@ -91,6 +91,36 @@ class Reference extends Changeable {
   }
 }
 
+class Computed extends Changeable {
+  // A simple "computed" value. Computeds depend on other changeables;
+  // when any of the computed's changeables change, it immediately updates
+  // its value. This value is computed according to the given callback
+  // function.
+  //
+  // Computeds work with promises. If you want to make your callback an
+  // async function, it'll work just fine; the computed's value won't be
+  // updated until the promise resolves.
+
+  constructor(dependencies, fn) {
+    super()
+
+    this.dependencies = dependencies
+    this.fn = fn
+
+    for (const item of dependencies) {
+      item.onChange(() => this.update())
+    }
+
+    this.update()
+  }
+
+  async update() {
+    // Calls fn(a, b, c, d...) where the arguments are the values of the
+    // dependencies.
+    this.set(await this.fn(...this.dependencies.map(dep => dep.value)))
+  }
+}
+
 class Dictionary {
   // Just like a normal object, except it emits an event whenever a property
   // is set on it.
