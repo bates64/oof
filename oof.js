@@ -261,6 +261,11 @@ oof.mutableList = (render, initialState = [], listItemTag = '') => {
       return state[index]
     },
 
+    // Returns the last item in the state array.
+    getLast() {
+      return this.get(this.length - 1)
+    },
+
     // Sets the itemState used for a particular item, and re-renders it.
     set(index, newState) {
       state[index] = newState
@@ -274,6 +279,11 @@ oof.mutableList = (render, initialState = [], listItemTag = '') => {
 
       // Chaining!
       return self
+    },
+
+    // Returns the length of the state.
+    get length() {
+      return state.length
     },
 
     // Will render (and, in the future, update) to `selectorOrEl`.
