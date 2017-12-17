@@ -237,6 +237,19 @@ oof.mutableList = (render, initialState = [], listItemTag = '') => {
       }
     },
 
+    // Like Array#splice(0).
+    clear() {
+      state.splice(0)
+
+      for (const mount of mounts) {
+        for (const child of mount.el.children) {
+          mount.el.removeChild(child)
+        }
+
+        mount.nodes.splice(0)
+      }
+    },
+
     // Returns the itemState used for a particular item.
     get(index) {
       return state[index]
