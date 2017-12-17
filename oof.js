@@ -242,7 +242,13 @@ oof.mutableList = (render, initialState = [], listItemTag = '') => {
       state.splice(0)
 
       for (const mount of mounts) {
-        for (const child of mount.el.children) {
+        // Pro-tip: avoid iterating through an element's childNodes using
+        // for..of! If you modify the list while you're iterating through it,
+        // some elements won't actually be iterated over. In the case of a
+        // "clear" function, that means you end up with "garbage" or "ghost"
+        // elements (missed when the rest were removed). Yikes!
+        let child
+        while (child = mount.el.firstChild) {
           mount.el.removeChild(child)
         }
 
