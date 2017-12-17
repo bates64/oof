@@ -62,8 +62,6 @@ Simply include [oof.js](oof.js) in your page. You may want to include more - see
 <script src='oof.js'></script>
 ```
 
-See [releases]() for 
-
 You can find documentation [on the wiki](https://github.com/heyitsmeuralex/oof/wiki).
 
 ### Tradeoffs
