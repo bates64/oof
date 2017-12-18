@@ -76,24 +76,21 @@ morph elements rather than re-rendering the entire thing when state changes.
 
 See the [morphdom example](examples/morphdom.html).
 
-#### bel
+#### justel
 
-It is recommended that you use something like [bel](https://github.com/shama/bel#bel) to template
-your components. **Note: bel requires the use of browserify**.
+It is recommended that you use something like [justel](https://github.com/heyitsmeuralex/justel) to write your component render functions.
 
 ```js
-const bel = require('bel')
-
 class Component extends oof.El {
   // ...
 
   render(name) {
-    return bel`<div>
-      Hi ${name}!
-    </div>`
+    return el('div', `Hi, ${name}!`)
   }
 }
 ```
+
+If you want to use something more JSX-like, check out [bel](https://www.npmjs.com/package/bel).
 
 ### Why should I use oof?
 
