@@ -95,5 +95,5 @@ If you want to use something more JSX-like, check out [bel](https://www.npmjs.co
 
 ### Why should I use oof?
 
-I don't know - it was quickly made for [bantisocial](https://github.com/towerofnix/bantisocial) after we realised
+I don't know - it was quickly made for [Decent](https://github.com/towerofnix/decent) after we realised
 that we should probably roll our own UI framework 😤
