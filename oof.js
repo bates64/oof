@@ -4,23 +4,56 @@ window.oof = (function() {
   // Optional dependency: morphdom
   const usingMorphdom = typeof morphdom !== 'undefined'
 
-  // Changeables ///////////////////////////////////////////////////////////////
-
-  class Changeable {
+  // EventEmitter //////////////////////////////////////////////////////////////
+  
+  class EventEmitter {
     constructor() {
-      this.listeners = []
-      this.value = undefined // Unset
+      this[EventEmitter.listenerMap] = {}
     }
 
-    onChange(listener) {
-      this.listeners.push(listener)
+    // Listen for `event`
+    on(event, listenerFn) {
+      const map = this[EventEmitter.listenerMap]
+      const listeners = map[event] = map[event] || []
+
+      listeners.push(listenerFn)
+
+      return {
+
+        // Unlisten
+        remove() {
+          if (listeners.includes(listenerFn)) {
+            listeners.splice(listeners.indexOf(listenerFn), 1)
+          }
+        }
+
+      }
+    }
+
+    // Emit `event`
+    emit(event, ...data) {
+      const listeners = this[EventEmitter.listenerMap][event] || []
+
+      for (const listenerFn of listeners) {
+        listenerFn(...data)
+      }
+    }
+  }
+
+  EventEmitter.listenerMap = Symbol()
+
+  // Changeables ///////////////////////////////////////////////////////////////
+
+  class Changeable extends EventEmitter {
+    constructor() {
+      super()
+
+      this.value = undefined // Unset
     }
 
     set(newValue) {
       this.value = newValue
-      for (const listener of this.listeners) {
-        listener(newValue)
-      }
+      this.emit('change', newValue)
     }
 
     static valueOf(object) {
@@ -59,11 +92,11 @@ window.oof = (function() {
       this.oldDictionaryListener = null
 
       if (this.referencedObject instanceof Changeable) {
-        this.referencedObject.onChange(value => this.update())
+        this.referencedObject.on('change', value => this.update())
       }
 
       if (this.key instanceof Changeable) {
-        this.key.onChange(value => this.update())
+        this.key.on('change', value => this.update())
       }
 
       this.update()
@@ -116,7 +149,7 @@ window.oof = (function() {
       this.fn = fn
 
       for (const item of dependencies) {
-        item.onChange(() => this.update())
+        item.on('change', () => this.update())
       }
 
       this.update()
@@ -223,7 +256,7 @@ window.oof = (function() {
         if (changeable instanceof Changeable) {
           // Watch the Changeable for changes, and trigger a re-render when it
           // does.
-          changeable.onChange(() => {
+          changeable.on('change', () => {
             rerender()
           })
         } else {

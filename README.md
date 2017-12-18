@@ -74,6 +74,7 @@ extra libraries in your page, and it will use them.
 If you want to tradeoff **size for speed**, include [morphdom](https://raw.githubusercontent.com/patrick-steele-idem/morphdom/master/dist/morphdom-umd.min.js) in your page, too. oof will then smartly
 morph elements rather than re-rendering the entire thing when state changes.
 
+**Beware: morphdom might eat your event listeners**.
 See the [morphdom example](examples/morphdom.html).
 
 #### justel

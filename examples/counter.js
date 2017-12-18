@@ -36,6 +36,6 @@ class Counter extends oof.El {
 
 const myCounter = new Counter('#my-counter', { changeBy: +1 })
 
-myCounter.count.onChange(count => {
+myCounter.count.on('change', count => {
   console.log(count)
 })
