@@ -162,6 +162,7 @@ window.oof = (function() {
     }
   }
 
+  // TODO make this actually Changeable
   class Dictionary {
     // Just like a normal object, except it emits an event whenever a property
     // is set on it.
@@ -200,6 +201,55 @@ window.oof = (function() {
 
   Dictionary.listeners = Symbol()
 
+  class List extends Changeable {
+    // Thin observable wrapper around Array
+
+    constructor(initialList = []) {
+      super()
+
+      this.set(initialList)
+    }
+
+    [Symbol.iterator]() {
+      return this.value[Symbol.iterator]()
+    }
+
+    // Updates value at index
+    update(index, element) {
+      this.value[index] = element
+      this.emit('update', index, element)
+    }
+
+    // Adds to end
+    push(element) {
+      this.value.push(element)
+      this.emit('push', element)
+    }
+
+    // Removes last
+    pop() {
+      const element = this.value.pop()
+      this.emit('pop', element)
+      return element
+    }
+
+    // Adds to beginning
+    unshift(element) {
+      this.value.unshift(element)
+      this.emit('unshift', element)
+    }
+
+    // Removes first
+    shift() {
+      const element = this.value.shift()
+      this.emit('shift', element)
+      return element
+    }
+
+    get length() {
+      return this.value.length
+    }
+  }
 
   // El ////////////////////////////////////////////////////////////////////////
 
@@ -266,7 +316,7 @@ window.oof = (function() {
       }
 
       // Initial render
-      rerender()
+      window.requestAnimationFrame(rerender)
     }
 
     init(opts) {
@@ -284,6 +334,80 @@ window.oof = (function() {
   }
 
   El.renderWithState = Symbol()
+
+  // ElList ////////////////////////////////////////////////////////////////////
+
+  function elList(selector, renderItem, initialList = []) {
+    const mounts = document.querySelectorAll(selector)
+    const list = initialList instanceof List
+      ? initialList
+      : new List(initialList)
+
+    function renderWhole() {
+      for (const mount of mounts) {
+        // Clear
+        let childNode
+        while (childNode = mount.firstChild) {
+          childNode.remove()
+        }
+
+        // Add all items
+        for (const item of list) {
+          const el = renderItem(item, list)
+
+          mount.appendChild(el)
+        }
+      }
+    }
+
+    renderWhole()
+
+    list.on('change', renderWhole)
+
+    list.on('push', item => {
+      for (const mount of mounts) {
+        // Append new item
+        const el = renderItem(item, list)
+
+        mount.appendChild(el)
+      }
+    })
+
+    list.on('pop', () => {
+      for (const mount of mounts) {
+        // Remove final item
+        mount.lastChild.remove()
+      }
+    })
+
+    list.on('unshift', item => {
+      for (const mount of mounts) {
+        // Prepend new item
+        const el = renderItem(item, list)
+
+        mount.prepend(el)
+      }
+    })
+
+    list.on('shift', () => {
+      for (const mount of mounts) {
+        // Remove first item
+        mount.firstChild.remove()
+      }
+    })
+
+    list.on('update', (n, item) => {
+      for (const mount of mounts) {
+        // Update nth item
+        const oldEl = mount.children.item(n)
+        const newEl = renderItem(item, list)
+
+        mount.replaceChild(newEl, oldEl)
+      }
+    })
+
+    return list
+  }
 
   // Mini //////////////////////////////////////////////////////////////////////
 
@@ -312,9 +436,9 @@ window.oof = (function() {
   return {
     version: '0.1.0', usingMorphdom,
 
-    El, mini,
+    El, mini, elList,
 
     // Changeables
-    Changeable, Value, Reference, Computed, Dictionary,
+    Changeable, Value, Reference, Computed, List, Dictionary, List,
   }
 })()
