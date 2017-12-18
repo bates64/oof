@@ -5,7 +5,7 @@ window.oof = (function() {
   const usingMorphdom = typeof morphdom !== 'undefined'
 
   // EventEmitter //////////////////////////////////////////////////////////////
-  
+
   class EventEmitter {
     constructor() {
       this[EventEmitter.listenerMap] = {}
@@ -214,6 +214,12 @@ window.oof = (function() {
       return this.value[Symbol.iterator]()
     }
 
+    // Resets list
+    set(list) {
+      super.set(list)
+      this.emit('set', list)
+    }
+
     // Updates value at index
     update(index, element) {
       this.value[index] = element
@@ -272,7 +278,7 @@ window.oof = (function() {
       // this.render but with the current state
       this[El.renderWithState] = () => {
         const node = this.render(...changeables.map(ch => ch.value))
-      
+
         if (!(node instanceof HTMLElement)) {
           throw `El ${this.constructor.name}'s render() method did not return `
               + `an HTMLElement`
@@ -362,7 +368,7 @@ window.oof = (function() {
 
     renderWhole()
 
-    list.on('change', renderWhole)
+    list.on('set', renderWhole) // Note: not on('change')
 
     list.on('push', item => {
       for (const mount of mounts) {
@@ -419,7 +425,7 @@ window.oof = (function() {
         } else {
           this.state = new Value(initialState)
         }
-        
+
         return [ this.state ]
       }
 
@@ -438,7 +444,8 @@ window.oof = (function() {
 
     El, mini, elList,
 
-    // Changeables
-    Changeable, Value, Reference, Computed, List, Dictionary, List,
+    EventEmitter,
+    Changeable, Value, Reference, Computed,
+    List, Dictionary,
   }
 })()
